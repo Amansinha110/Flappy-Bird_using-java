@@ -64,6 +64,7 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
     Timer placePipeTimer;
     boolean gameOver = false;
     double score = 0;
+    boolean gameStarted = false;
 
     FlappyBird() {
         setPreferredSize(new Dimension(boardWidth, boardHeight));
@@ -89,26 +90,25 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
               placePipes();
             }
         });
-        placePipeTimer.start();
         
 		//game timer
 		gameLoop = new Timer(1000/60, this); //how long it takes to start timer, milliseconds gone between frames 
-        gameLoop.start();
+        gameLoop.start(); // Start the game loop for rendering
 	}
     
     void placePipes() {
-        //(0-1) * pipeHeight/2.
-        // 0 -> -128 (pipeHeight/4)
-        // 1 -> -128 - 256 (pipeHeight/4 - pipeHeight/2) = -3/4 pipeHeight
-        int randomPipeY = (int) (pipeY - pipeHeight/4 - Math.random()*(pipeHeight/2));
+        // Calculate random pipe position with better bounds checking
         int openingSpace = boardHeight/4;
+        int minPipeY = -pipeHeight/2;
+        int maxPipeY = boardHeight/2 - pipeHeight/2 - openingSpace;
+        int randomPipeY = (int) (minPipeY + Math.random() * (maxPipeY - minPipeY));
     
         Pipe topPipe = new Pipe(topPipeImg);
         topPipe.y = randomPipeY;
         pipes.add(topPipe);
     
         Pipe bottomPipe = new Pipe(bottomPipeImg);
-        bottomPipe.y = topPipe.y  + pipeHeight + openingSpace;
+        bottomPipe.y = topPipe.y + pipeHeight + openingSpace;
         pipes.add(bottomPipe);
     }
     
@@ -133,10 +133,15 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
 
         //score
         g.setColor(Color.white);
-
-        g.setFont(new Font("Arial", Font.PLAIN, 32));
+        g.setFont(new Font("Arial", Font.BOLD, 32));
+        
         if (gameOver) {
             g.drawString("Game Over: " + String.valueOf((int) score), 10, 35);
+            g.setFont(new Font("Arial", Font.PLAIN, 18));
+            g.drawString("Press SPACE to restart", 10, boardHeight - 50);
+        }
+        else if (!gameStarted) {
+            g.drawString("Press SPACE to start", 10, boardHeight/2);
         }
         else {
             g.drawString(String.valueOf((int) score), 10, 35);
@@ -145,13 +150,22 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
 	}
 
     public void move() {
+        if (!gameStarted || gameOver) {
+            return; // Don't move anything if game hasn't started or is over
+        }
+        
         //bird
         velocityY += gravity;
         bird.y += velocityY;
         bird.y = Math.max(bird.y, 0); //apply gravity to current bird.y, limit the bird.y to top of the canvas
+        
+        // Check if bird hits the top of the screen
+        if (bird.y <= 0) {
+            gameOver = true;
+        }
 
         //pipes
-        for (int i = 0; i < pipes.size(); i++) {
+        for (int i = pipes.size() - 1; i >= 0; i--) {
             Pipe pipe = pipes.get(i);
             pipe.x += velocityX;
 
@@ -162,6 +176,11 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
 
             if (collision(bird, pipe)) {
                 gameOver = true;
+            }
+
+            // Remove pipes that have gone off-screen to prevent memory leak
+            if (pipe.x + pipe.width < 0) {
+                pipes.remove(i);
             }
         }
 
@@ -190,18 +209,23 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
     @Override
     public void keyPressed(KeyEvent e) {
         if (e.getKeyCode() == KeyEvent.VK_SPACE) {
-            // System.out.println("JUMP!");
-            velocityY = -9;
-
             if (gameOver) {
                 //restart game by resetting conditions
                 bird.y = birdY;
                 velocityY = 0;
                 pipes.clear();
                 gameOver = false;
+                gameStarted = true;
                 score = 0;
-                gameLoop.start();
                 placePipeTimer.start();
+            } else if (!gameStarted) {
+                // Start the game
+                gameStarted = true;
+                placePipeTimer.start();
+                velocityY = -9;
+            } else {
+                // Jump only if game is running
+                velocityY = -9;
             }
         }
     }
